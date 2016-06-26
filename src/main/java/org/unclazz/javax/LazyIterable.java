@@ -4,7 +4,28 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
-public final class LazyIterable<U,T> implements Iterable<U> {
+/**
+ * 遅延評価による反復子{@link Iterator}を提供する{@link Iterable}の実装クラス.
+ * <p>このクラスの{@link #iterator()}メソッドが返す反復子はデータソースからの値を取得を可能な限り遅らせる。
+ * なお反復子のメソッド{@link Iterator#remove()}はサポートされておらず、
+ * 呼びだされた場合はかならず例外{@link UnsupportedOperationException}をスローする。</p>
+ * @param <T> データソースが提供する値の型
+ * @param <U> 反復子が返す値の型
+ */
+public final class LazyIterable<T,U> implements Iterable<U> {
+	/**
+	 * {@link YieldCallable#yield(Object, int)}が値を返すのに用いるコンテナ.
+	 * <p>インスタンスは以下の3種のstaticファクトリ・メソッドを通じて取得する：</p>
+	 * <dl>
+	 * <dt>{@link #yieldReturn(Object)}</dt>
+	 * <dd>値を返す。データソースから取得された値は{@link LazyIterable}による反復処理に反映される。</dd>
+	 * <dt>{@link #yieldVoid()}</dt>
+	 * <dd>値を返さない。データソースから取得された値は{@link LazyIterable}による反復処理に反映されない。</dd>
+	 * <dt>{@link #yieldBreak()}</dt>
+	 * <dd>値を返さない。データソースからの値の取得を停止する。取得された値は{@link LazyIterable}による反復処理に反映されない。</dd>
+	 * </dl>
+	 * @param <T> コンテナが内包する値の型
+	 */
 	public static final class Yield<T> {
 		private static final Yield<?> nullInstance = new Yield<Object>(null, 0);
 		private static final Yield<?> voidInstance = new Yield<Object>(null, 1);
@@ -59,6 +80,17 @@ public final class LazyIterable<U,T> implements Iterable<U> {
 			return false;
 		}
 	}
+	/**
+	 * 遅延評価による反復子のためユーザが実装するインターフェース.
+	 * <p>データソースから取得された値を引数にとり、その内容に基づき何かしらの判断・加工などを行った上で、
+	 * その結果を制御情報とともに返す。結果値と制御情報は反復子により利用される。
+	 * 値と制御情報の返し方については{@link Yield}のドキュメントを参照のこと。</p>
+	 *
+	 * @param <T> データソースが提供する値の型
+	 * @param <U> 反復子が返す値の型
+	 * @throws NoSuchElementException データソースが同例外をスローした場合。
+	 * 			{@link Yield#yieldBreak()}と同じ意味に解釈される。
+	 */
 	public static interface YieldCallable<T,U> {
 		Yield<U> yield(T item, int index);
 	}
@@ -82,18 +114,22 @@ public final class LazyIterable<U,T> implements Iterable<U> {
 				return false;
 			}
 			while (lastNextReturn = source.hasNext()) {
-				final Yield<U> y = callable.yield(source.next(), ++index);
-				if (y.isBreak()) {
+				try {
+					final Yield<U> y = callable.yield(source.next(), ++index);
+					if (y.isBreak()) {
+						break;
+					}
+					if (y.isVoid()) {
+						continue;
+					}
+					if (y.isReturn()) {
+						lastNextReturn = true;
+						hasNextChecked = true;
+						nextCached = y.get();
+						return true;
+					}
+				} catch (final NoSuchElementException e) {
 					break;
-				}
-				if (y.isVoid()) {
-					continue;
-				}
-				if (y.isReturn()) {
-					lastNextReturn = true;
-					hasNextChecked = true;
-					nextCached = y.get();
-					return true;
 				}
 			}
 			lastNextReturn = false;
@@ -120,12 +156,25 @@ public final class LazyIterable<U,T> implements Iterable<U> {
 		}
 	}
 	
+	/**
+	 * 単一値をデータソースとする{@link Iterable}を生成して返す.
+	 * @param source データソースとなる単一値
+	 * @param callable データソースから取得された値をもとに判断・加工を行ってその値と制御情報を反復子に提供するインターフェース
+	 * @return {@link Iterable}のインスタンス
+	 */
 	public static<T,U> Iterable<U> forOnce(final T source, final YieldCallable<T, U> callable) {
-		return new LazyIterable<U, T>(Collections
+		return new LazyIterable<T,U>(Collections
 				.<T>singletonList(source), callable);
 	}
+	/**
+	 * {@link Iterable}をデータソースとする{@link Iterable}を生成して返す.
+	 * <p>データソースからの値の取得とそれに伴う判断・加工の処理は可能な限り遅らせられる。
+	 * @param source データソースとなる{@link Iterable}
+	 * @param callable データソースから取得された値をもとに判断・加工を行ってその値と制御情報を反復子に提供するインターフェース
+	 * @return {@link Iterable}のインスタンス
+	 */
 	public static<T,U> Iterable<U> forEach(final Iterable<T> source, final YieldCallable<T, U> callable) {
-		return new LazyIterable<U, T>(source, callable);
+		return new LazyIterable<T,U>(source, callable);
 	}
 	private static void notSupportedRemoveMethod() {
 		throw new UnsupportedOperationException(String.format(
