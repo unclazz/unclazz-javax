@@ -155,6 +155,58 @@ public final class LazyIterable<T,U> implements Iterable<U> {
 			notSupportedRemoveMethod();
 		}
 	}
+	private static final class SupplierBasedIterator<T> implements Iterator<T>{
+		private final Supplier<T> supplier;
+		private boolean next = true;
+		private SupplierBasedIterator(Supplier<T> s) {
+			this.supplier = s;
+		}
+		@Override
+		public boolean hasNext() {
+			return next;
+		}
+		@Override
+		public T next() {
+			if (!next) {
+				throw new NoSuchElementException();
+			}
+			try {
+				return supplier.get();
+			} catch (final NoSuchElementException e) {
+				next = false;
+				throw e;
+			}
+		}
+		@Override
+		public void remove() {
+			notSupportedRemoveMethod();
+		}
+	}
+	private static final class IteratorWrapper<T> implements Iterable<T> {
+		private final Iterator<T> iter;
+		private IteratorWrapper(Iterator<T> iter) {
+			this.iter = iter;
+		}
+		@Override
+		public Iterator<T> iterator() {
+			return iter;
+		}
+	}
+	/**
+	 * データソースを表すインターフェース.
+	 * <p>{@link Iterator}と同じく例外{@link NoSuchElementException}をスローすることで
+	 * 取得可能な値がなくなったことを示す。{@link Iterator#hasNext()}に相当するメソッドは存在しないので、
+	 * 例外がこの状況を示す唯一の手段となる。</p>
+	 * @param <T> データソースから取得できる値の型
+	 */
+	public static interface Supplier<T> {
+		/**
+		 * データソースから値を1つ取得する.
+		 * @return 値
+		 * @throws NoSuchElementException データソースから取得可能な値がなくなった場合
+		 */
+		T get();
+	}
 	
 	/**
 	 * 単一値をデータソースとする{@link Iterable}を生成して返す.
@@ -163,8 +215,7 @@ public final class LazyIterable<T,U> implements Iterable<U> {
 	 * @return {@link Iterable}のインスタンス
 	 */
 	public static<T,U> Iterable<U> forOnce(final T source, final YieldCallable<T, U> callable) {
-		return new LazyIterable<T,U>(Collections
-				.<T>singletonList(source), callable);
+		return new LazyIterable<T,U>(Collections.singleton(source), callable);
 	}
 	/**
 	 * {@link Iterable}をデータソースとする{@link Iterable}を生成して返す.
@@ -175,6 +226,16 @@ public final class LazyIterable<T,U> implements Iterable<U> {
 	 */
 	public static<T,U> Iterable<U> forEach(final Iterable<T> source, final YieldCallable<T, U> callable) {
 		return new LazyIterable<T,U>(source, callable);
+	}
+	/**
+	 * {@link Supplier}をデータソースとする{@link Iterable}を生成して返す.
+	 * <p>データソースからの値の取得とそれに伴う判断・加工の処理は可能な限り遅らせられる。
+	 * @param source データソースとなる{@link Supplier}
+	 * @param callable データソースから取得された値をもとに判断・加工を行ってその値と制御情報を反復子に提供するインターフェース
+	 * @return {@link Iterable}のインスタンス
+	 */
+	public static<T,U> Iterable<U> forEach(final Supplier<T> source, final YieldCallable<T, U> callable) {
+		return new LazyIterable<T,U>(new IteratorWrapper<T>(new SupplierBasedIterator<T>(source)), callable);
 	}
 	private static void notSupportedRemoveMethod() {
 		throw new UnsupportedOperationException(String.format(

@@ -8,6 +8,7 @@ import java.util.LinkedList;
 import java.util.List;
 
 import org.junit.Test;
+import org.unclazz.javax.LazyIterable.Supplier;
 import org.unclazz.javax.LazyIterable.Yield;
 import org.unclazz.javax.LazyIterable.YieldCallable;
 
@@ -195,5 +196,44 @@ public class LazyIterableTest {
 		// Assert
 		assertTrue(ints2.containsAll(ints));
 	}
-
+	
+	@Test
+	public void forEarch_whenApplyToSupplier_returnsIterableEndless() {
+		// Trace
+		sysoutf("before \"for\" statement.");
+		// Arrange
+		final Supplier<Integer> fibSupplier = new Supplier<Integer>() {
+			private int _0 = -1;
+			private int _1 = -1;
+			@Override
+			public Integer get() {
+				if (_0 == -1) {
+					return _0 = 0;
+				} else if (_1 == -1) {
+					return _1 = 1;
+				} else {
+					final int next1 = _0 + _1;
+					_0 = _1;
+					_1 = next1;
+					return _1;
+				}
+			}
+		};
+		for (final String s : LazyIterable.forEach(fibSupplier,
+						new YieldCallable<Integer, String>() {
+			@Override
+			public Yield<String> yield(Integer item, int index) {
+				sysoutf("in yield method. fib[%s] = %s.", index, item);
+				if (index < 5) {
+					return Yield.yieldReturn(item.toString());
+				} else {
+					return Yield.yieldBreak();
+				}
+			}
+		})) {
+			sysoutf("in \"for\" statement. fib[x] = %s.", s);
+		}
+		// Trace
+		sysoutf("after \"for\" statement.");
+	}
 }
