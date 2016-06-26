@@ -2,11 +2,10 @@
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 
-	<groupId>org.unclazz.jp1ajs2</groupId>
-	<artifactId>unclazz-jp1ajs2-unitdef</artifactId>
-	<version>2.5.0-RELEASE</version>
-	<name>JP1/AJS2 Unitdef</name>
-	<description>Java API for traversing and manipulating JP1/AJS2 Job Unit Definition</description>
+	<groupId>org.unclazz</groupId>
+	<artifactId>unclazz-javax</artifactId>
+	<version>1.0.0-SNAPSHOT</version>
+	<name>Unclazz Javax</name>
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
